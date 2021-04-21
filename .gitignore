@@ -1,0 +1,14 @@
+node_modules
+.ts-tmp
+build
+tmp
+
+*/**/*
+*.*
+
+# ALLOW
+!public/**/*
+!src/**/*
+!test/**/*
+!.gitignore
+!README.md
