@@ -2,74 +2,90 @@
 //TODO when database updated to cloud... what do i do
 
 /**
+ * @typedef {string} STORE_NAME
+ * 
  * @typedef {{
-* name: string,
-* store: { 
-*  primary: string, 
-*  autoIncrement: boolean, 
-*  indexes: Array<string>
-* }}} DB_STORE
+ *  name: string,
+ *  primary: string, 
+ *  autoIncrement: boolean, 
+ *  indexes: Array<string>, 
+ * }} DB_STORE
+ * 
+ * @typedef {Map<STORE_NAME,DB_STORE>} DB_STORES
+ * 
+ * * DB_STORES - EXAMPLE --- 
+ *  db_stores = new Map([
+ *  [ name1, { primary: .., auto: .., indexes: [...] }], 
+ *  [ name1, { primary: .., auto: .., indexes: [...] }], 
+ *  [ name3, { primary: .., auto: .., indexes: [...] }], 
+ * ]);
 */
 
 /**
 * @param {string} name 
 * @param {long} version 
+* @param {DB_STORES} storeStructs
 * @returns {Promise<IDBDatabase>}
 */
-function CONNECT(name, version) {
+export function IDB_connect(name, version, storeStructs) {
 
-const DB = new Promise( (resolve, reject) => {
-  const request = indexedDB.open(name, version);
+  const DB = new Promise( (resolve, reject) => {
+    const request = indexedDB.open(name, version);
 
-  request.onsuccess = function (_ev) {
-    const DB = this.result;
+    request.onsuccess = function (_ev) {
+      const DB = this.result;
 
-    DB.onversionchange = function() {
-      DB.close()
-      // TODO launchPopup($newVersionPopupContent)
-    }
+      DB.onversionchange = function() {
+        DB.close();
+        if(window.confirm('Page must be refreshed due to updated version.\nClick OK to refresh.')) {
+          window.location.reload();
+        } else {
+          reject('Reload Page');
+        }
+      }
 
-    resolve(DB);
-  };
+      resolve(DB);
+    };
 
-  request.onerror = function (ev) {
-    console.error("openDb:", ev.target.error);
-    reject(ev.target.error);
-  };
+    request.onerror = function (ev) {
+      console.error("openDb:", ev.target.error);
+      reject(ev.target.error);
+    };
 
-  request.onupgradeneeded = function (_ev) {
-    CREATE( this.result, DB_STORES );
-    resolve(this.result);
-  };
-});
+    request.onupgradeneeded = function (_ev) {
+      IDB_create( this.result, storeStructs );
+      resolve(this.result);
+    };
+  });
 
-return DB;
+  return DB;
 }
 
 /**
 * @param {IDBDatabase} db 
-* @param {DB_STORE[]} tables 
+* @param {DB_STORES} tables 
 */
-function CREATE(db, tables) {
-//TODO Should lock?
-for(const table of tables) {
-  if(!db.objectStoreNames.contains(table.name)) {
-    const store = db.createObjectStore(table.name, {
-      keyPath: table.store.primary,
-      autoIncrement: table.store.autoIncrement,
-    });
+function IDB_create(db, tables) {
 
-    store.createIndex( table.store.primary, table.store.primary, { unique: true, } );
+  for(const [storeName, store] of tables) {
+    if(!db.objectStoreNames.contains(storeName)) {
+      const oStore = db.createObjectStore(storeName, {
+        keyPath: store.primary,
+        autoIncrement: store.autoIncrement,
+      });
 
-    for(const col of table.store.indexes) {
-      if(col?.length > 0) {
-        store.createIndex( col.join(', '), col );
-      } else {
-        store.createIndex( col, col );
+      oStore.createIndex( store.primary, store.primary, { unique: true, } );
+
+      for(const col of store.indexes) {
+        if(col.includes(',')) {
+          let indeces = col.split(',');
+          oStore.createIndex( col, [indeces[0].trim(), indeces[1].trim()] );
+        } else {
+          oStore.createIndex( col, col );
+        }
       }
     }
   }
-}
 }
 
 /**
@@ -78,17 +94,19 @@ for(const table of tables) {
 * @param {'readonly' |'readwrite'} mode
 * @param {?Function} callError
 */
-function FROM(db, table, mode, callError) {
-try {
-  const TX = db.transaction(table.name, mode);
-  callError ? TX.onerror = (ev) => {
-    callError(ev);
-    throw ev.target.error;
-  } : null;
-  return TX.objectStore(table.name);
-} catch (error) {
-  console.error(error);
-}
+export function IDB_from(db, table, mode, callError) {
+  try {
+
+    const TX = db.transaction(table.name, mode);
+    callError ? TX.onerror = (ev) => {
+      callError(ev);
+      throw ev.target.error;
+    } : null;
+
+    return TX.objectStore(table.name);
+  } catch (error) {
+    console.error(error);
+  }
 }
 
 /**
@@ -97,22 +115,23 @@ try {
 * @param {{ value: any, key: ?any}} item
 * @returns {Promise<any>}
 */
-function ADD(db, table, item) {
-const OPS = FROM(db, table, 'readwrite', (errorEv) => {
-  if (errorEv.target.error.name === 'QuotaExceededError') {
-    //TODO do something
-    throw errorEv.target.error;
-  } else {
-    errorEv.preventDefault();
-  }
-});
+export function IDB_add(db, table, item) {
 
-return new Promise((res) => {
-  const result = OPS.add(item.value, item?.key);
-  result.onsuccess = (key) => {
-    res(key);
-  }
-});
+  const OPS = IDB_from(db, table, 'readwrite', (errorEv) => {
+    if (errorEv.target.error.name === 'QuotaExceededError') {
+      //TODO do something
+      throw errorEv.target.error;
+    } else {
+      errorEv.preventDefault();
+    }
+  });
+
+  return new Promise((res) => {
+    const result = OPS.add(item.value, item?.key);
+    result.onsuccess = (ev) => {
+      res(ev.target.result); //record's id
+    }
+  });
 }
 
 /**
@@ -121,22 +140,23 @@ return new Promise((res) => {
 * @param {{ value: any, key: any}} item
 * @returns {Promise<any>}
 */
-function UPDATE(db, table, item) {
-const OPS = FROM(db, table, 'readwrite', (errorEv) => {
-  if (errorEv.target.error.name === 'QuotaExceededError') {
-    //TODO do something
-    throw errorEv.target.error;
-  } else {
-    errorEv.preventDefault();
-  }
-});
+export function IDB_update(db, table, item) {
 
-return new Promise((res) => {
-  const result = OPS.put(item.value, item.key);
-  result.onsuccess = (key) => {
-    res(key);
-  }
-});
+  const OPS = IDB_from(db, table, 'readwrite', (errorEv) => {
+    if (errorEv.target.error.name === 'QuotaExceededError') {
+      //TODO do something
+      throw errorEv.target.error;
+    } else {
+      errorEv.preventDefault();
+    }
+  });
+
+  return new Promise((res) => {
+    const result = OPS.put(item.value, item.key);
+    result.onsuccess = (ev) => {
+      res(ev.target.result);//record's id
+    }
+  });
 }
 
 /**
@@ -145,37 +165,40 @@ return new Promise((res) => {
 * @param { {WHERE: (any|IDBKeyRange), COUNT: number?}? } query
 * @returns {Promise<any[]>}
 */
-function SELECT_ALL_IN(db, table, query) {
-const OPS = FROM(db, table, 'readonly');
+export function IDB_select_ALLIN(db, table, query) {
 
-return new Promise((res) => {
-  const result = OPS.getAll(query?.WHERE, query.SORT);
-  result.onsuccess = (array) => {
-    res(array);
-  }
-});
+  const OPS = IDB_from(db, table, 'readonly');
+
+  return new Promise((res) => {
+    const result = OPS.getAll(query?.WHERE, query?.COUNT);
+    result.onsuccess = (ev) => {
+      res(ev.target.result);//array<any>
+    }
+  });
 }
 
 /**
 * @param {IDBDatabase} db 
 * @param {DB_STORE} table
 * @param { {WHERE: (any|IDBKeyRange), SORT: ('next'|'nextunique'|'prev'|'prevunique')?}? } query
-* @returns {Promise<any>}
+* @returns {Promise<boolean>}
 */
-function SELECT_ITER_IN(db, table, callBack, query) {
-const OPS = FROM(db, table, 'readonly');
+export function IDB_select_IN(db, table, callBack, query) {
 
-return new Promise(() => {
-  const cursor = OPS.openCursor(query?.WHERE, query.SORT);
-  if (cursor) {
-    cursor.onsuccess = (record) => {
-      callBack(record);
+  const OPS = IDB_from(db, table, 'readonly');
+
+  return new Promise((res, rej) => {
+    const cursor = OPS.openCursor(query?.WHERE, query?.SORT);
+    if (cursor) {
+      cursor.onsuccess = (ev) => {
+        callBack(ev.target.result);//record
+      }
+      cursor.continue();
+    } else {
+      res(false);
+      rej(false);
     }
-    cursor.continue();
-  } else {
-    // no more results
-  }
-});
+  });
 }
 
 /**
@@ -184,15 +207,16 @@ return new Promise(() => {
 * @param {any} key
 * @returns {Promise<any>}
 */
-function SELECT_IS_EQ(db, table, key) {
-const OPS = FROM(db, table, 'readonly');
+export function IDB_select_IS(db, table, key) {
 
-return new Promise((res) => {
-  const result = OPS.get(key);
-  result.onsuccess = (record) => {
-    res(record);
-  }
-});
+  const OPS = IDB_from(db, table, 'readonly');
+
+  return new Promise((res) => {
+    const result = OPS.get(key);
+    result.onsuccess = (ev) => {
+      res(ev.target.result); //record
+    }
+  });
 }
 
 /**
@@ -200,13 +224,14 @@ return new Promise((res) => {
 * @param {DB_STORE} table
 * @returns {Promise<undefined>}
 */
-function REMOVE_ALL(db, table) {
-const OPS = FROM(db, table, 'readwrite');
+export function IDB_remove(db, table) {
 
-return new Promise((res) => {
-  const result = OPS.clear();
-  result.onsuccess = () => {
-    res(undefined);
-  }
-});
+  const OPS = IDB_from(db, table, 'readwrite');
+
+  return new Promise((res) => {
+    const result = OPS.clear();
+    result.onsuccess = (_ev) => {
+      res(undefined);
+    }
+  });
 }
