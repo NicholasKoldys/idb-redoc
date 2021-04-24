@@ -4,8 +4,43 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Testing IDB</title>
+    <link rel="stylesheet" href="./style/main.css" />
 </head>
+<style>
+    html {
+        font-size: 1.5em;
+    }
+
+    main {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+
+        width: 90dvw;
+    }
+
+    div#btn-box {
+        display: flex;
+        align-items: stretch;
+        justify-content: space-between;
+    }
+
+    button {
+        height: 5dvh;
+        width: 10dvh;
+
+        font-size: 1rem;
+    }
+</style>
 <body>
+    <main id="app">
+        <h1>Testing with IDB</h1>
+        <div id="btn-box">
+            <button id="add-card-btn">Add Card</button>
+            <button id="del-card-btn">Del Card</button>
+        </div>
+    </main>
 </body>
 <script type="module" defer src="./js/main.js"></script>
 </html>
