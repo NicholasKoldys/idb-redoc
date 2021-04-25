@@ -1,0 +1,34 @@
+<template id="card-template">
+    <style>
+    .card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+
+        min-width: 10vw;
+        min-height: 10vh;
+        background-color: red;
+    }
+
+    .title-div {
+        flex: 1 0;
+        padding: 1em;
+        background-color: blue;
+    }
+
+    .desc-div {
+        flex: 2 0;
+        padding: 1em;
+        background-color: purple;
+    }
+    </style>
+    <div class="card">
+        <div class="title-div">
+            <h2 slot="title"></h2>
+        </div>
+        <div class="desc-div">
+            <p slot="desc"></h2>
+        </div>
+    </div>
+</template>
