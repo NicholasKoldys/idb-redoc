@@ -1,3 +1,4 @@
+import { Card, Desc } from "./main.js";
 import { 
     IDB_select_ALLIN as SELECT_ALL, 
     IDB_connect as OPEN_DB, 
@@ -5,27 +6,9 @@ import {
     IDB_add as ADD
 } from "../../src/idb-redoc.js";
 
-export class Card {
-    id;
-    title
-    d_id;
 
-    constructor(title) {
-        this.title = title;
-    }
-}
-
-export class Desc {
-    id;
-    text;
-    c_id;
-
-    constructor(text) {
-        this.text = text;
-    }
-}
-
-export class AppDatabase {
+// export class AppDatabase {
+class AppDatabase {
 
     /**
      * @typedef {{
@@ -66,45 +49,31 @@ export class AppDatabase {
     /**@type {Map<string, Desc>} */
     #descRepo;
 
-    constructor() {
+    constructor() { //! unable to await DB so use await/then outside of constructor
+        // this.#db_instance = OPEN_DB( this.#name, this.#version, this.#tables ).then( db => {return db;} );
 
-        this.#db_instance = OPEN_DB( this.#name, this.#version, this.#tables ).then( db => {return db;} );
-
-        this.#db_instance.then( (DB) => {
-            this.#cardRepo = SELECT_ALL(DB, this.#tables.get('cards')).then( 
-                (/**@type {Array<card>}*/ arr) => {
-                    console.log(arr);
-                    let cardRepoArray = new Map();
-                    arr.map( (card) => {
-                        const newCard = new Card(card.title);
-                        newCard.id = card.id;
-                        newCard.d_id = card.d_id;
-                        cardRepoArray.set(newCard.id, newCard);
-                    })
-                }
-            );
-            this.#descRepo = SELECT_ALL(DB, this.#tables.get('descs'));
-        });
+        // this.fetchCards();
     }
 
-    /**
-     * @returns {Promis<card[]>}
-     */
+    static async create() {
+        
+    }
+
+    /**@returns {Promise<Map<string, Card>>} */
     get cards() {
-        console.log('calling example cards...');
-
-        return this.#db_instance.then( (DB) => {
-            return SELECT_ALL(DB, this.#tables.get('cards'));
-        });
+        console.log('get cards: ', this.#cardRepo);
+        return new Promise( (res) => res(this.#cardRepo) );
     }
 
-    /**
-     * @returns {Promis<desc[]>}
-     */
+    /**@returns {Map<string, Card>} */
     get descriptions() {
 
         return this.#db_instance.then( (DB) => {
-            return SELECT_ALL(DB, this.#tables.get('descs'));
+            return SELECT_ALL(DB, this.#tables.get('descs')).then( (arr) => {
+                arr.map( obj => {
+                    return Object.assign(new Desc(), obj);
+                } )
+            });
         });
     }
 
@@ -112,11 +81,24 @@ export class AppDatabase {
         return this.#cardRepo.get(id);
     }
 
+    async fetchCards() {
+        console.log('IDB CardRepo');
+        this.#cardRepo = new Map();
+        const DB = await this.#db_instance;
+
+        const cardArr = (await SELECT_ALL(DB, this.#tables.get('cards')));
+        cardArr.map( (card) => {
+            this.#cardRepo.set( card.id, Object.assign(new Card(), card) );
+        } );
+
+        return this.#cardRepo;
+    }
+
     /**
      * @param  {...card} cards
      * @returns {}
      */
-    setCards( ...cards ) {
+    async setCards( ...cards ) {
         //TODO check if card is in CardsRepo, if not use add; and add id and dID
 
         const promises = new Array();
@@ -125,17 +107,24 @@ export class AppDatabase {
                 promises.push(
                     this.#db_instance.then( (DB) => {
                         UPDATE(DB, this.#tables.get('cards'), {value: card, key: card.id})
+                        .then( (id) => {
+                            this.#cardRepo.set(card.id, card);
+                        });
                     })
                 );
             } else {
                 promises.push(
                     this.#db_instance.then( (DB) => {
                         ADD(DB, this.#tables.get('cards'), {value: {title: card.title}})
+                        .then( (id) => {
+                            card.id = id;
+                            this.#cardRepo.set(card.id, card);
+                        });
                     })
                 );
             }
         }
-        return Promise.all(promises);
+        return await Promise.all(promises);
     }
 }
 
