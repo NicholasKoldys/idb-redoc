@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Testing IDB</title>
-    <link rel="stylesheet" href="./style/main.css" />
+    <link rel="stylesheet" href="./style/global.css" />
 </head>
 <style>
     main {
@@ -29,6 +29,15 @@
 
         font-size: 1rem;
     }
+
+    div#card-box {
+        display: flex;
+        justify-content: stretch;
+        flex-wrap: wrap;
+        gap: 1em .5em;
+
+        max-width: 95dvh;
+    }
 </style>
 <body>
     <main id="app">
@@ -36,6 +45,9 @@
         <div id="btn-box">
             <button id="add-card-btn">Add Card</button>
             <button id="del-card-btn">Del Card</button>
+        </div>
+        <div id="card-box">
+
         </div>
     </main>
 </body>
