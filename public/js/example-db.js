@@ -1,11 +1,10 @@
-import { Card, Desc } from "./main.js";
 import { 
     IDB_select_ALLIN as SELECT_ALL, 
     IDB_connect as OPEN_DB, 
     IDB_update as UPDATE,
     IDB_add as ADD
 } from "../../src/idb-redoc.js";
-
+import { Card } from "./model/Card.js";
 
 // export class AppDatabase {
 class AppDatabase {
@@ -24,9 +23,11 @@ class AppDatabase {
      * }} desc
      */
 
+    /**@type {Promise<IDBDatabase>|IDBDatabase} */
     #db_instance;
-    #version = 1; //!Hard reset if tables change
-    #name = 'simple-data';
+    #version; //!Hard reset if tables change
+    #name;
+    #isInit;
     
     /**@type {DB_STORES} */
     #tables = new Map([
@@ -49,8 +50,13 @@ class AppDatabase {
     /**@type {Map<string, Desc>} */
     #descRepo;
 
-    constructor() { //! unable to await DB so use await/then outside of constructor
-        // this.#db_instance = OPEN_DB( this.#name, this.#version, this.#tables ).then( db => {return db;} );
+    //! unable to await DB so use await/then outside of constructor
+    constructor(name, version) {
+        this.#name = name || 'simple-data';
+        this.version = version || 1;
+        this.#db_instance = null;
+        this.#isInit = false;
+    }
 
         // this.fetchCards();
     }
