@@ -58,36 +58,14 @@ class AppDatabase {
         this.#isInit = false;
     }
 
-        // this.fetchCards();
+    async init() {
+        this.#db_instance = await OPEN_DB( this.#name, this.#version, this.#tables );
+        await this.loadCardRepo();
+        this.#isInit = true;
+        return this;
     }
 
-    static async create() {
-        
-    }
-
-    /**@returns {Promise<Map<string, Card>>} */
-    get cards() {
-        console.log('get cards: ', this.#cardRepo);
-        return new Promise( (res) => res(this.#cardRepo) );
-    }
-
-    /**@returns {Map<string, Card>} */
-    get descriptions() {
-
-        return this.#db_instance.then( (DB) => {
-            return SELECT_ALL(DB, this.#tables.get('descs')).then( (arr) => {
-                arr.map( obj => {
-                    return Object.assign(new Desc(), obj);
-                } )
-            });
-        });
-    }
-
-    getCard( id ) {
-        return this.#cardRepo.get(id);
-    }
-
-    async fetchCards() {
+    async loadCardRepo() {
         console.log('IDB CardRepo');
         this.#cardRepo = new Map();
         const DB = await this.#db_instance;
@@ -100,37 +78,89 @@ class AppDatabase {
         return this.#cardRepo;
     }
 
+    /** @returns {Promise<Map<string, Card>>} */
+    get cards() {
+        if(this.#isInit)
+        return this.#cardRepo;
+    }
+
+    /** @returns {Map<string, Card>} */
+    get descriptions() {
+        if(this.#isInit) 
+        return this.#db_instance.then( (DB) => {
+            return SELECT_ALL(DB, this.#tables.get('descs')).then( (arr) => {
+                arr.map( obj => {
+                    return Object.assign(new Desc(), obj);
+                } )
+            });
+        });
+    }
+
+    /** 
+     * @param {number} id 
+     * @returns {Card} 
+     */
+    getCard( id ) {
+        if(this.#isInit) return this.#cardRepo.get(id);
+    }
+
+    /** @param {Card} card */
+    async addCard( card ) {
+        if(this.#isInit) {
+            let DB = await this.#db_instance;
+            let cardID = await ADD(DB, this.#tables.get('cards'), {value: {title: card.title}});
+            card.id = cardID;
+            this.#cardRepo.set(cardID, card);
+        }
+    }
+
+    /** @param {Card} card */
+    async setCard( card ) {
+        if(this.#isInit) {
+            let DB = await this.#db_instance;
+            let cardID = await ADD(DB, this.#tables.get('cards'), {value: {title: card.title}, key: card.id});
+            this.#cardRepo.set(cardID, card);
+        }
+    }
+
     /**
-     * @param  {...card} cards
+     * @param {...Card} cards
      * @returns {}
      */
     async setCards( ...cards ) {
         //TODO check if card is in CardsRepo, if not use add; and add id and dID
-
-        const promises = new Array();
-        for(let card of cards) {
-            if(card.id) {
-                promises.push(
-                    this.#db_instance.then( (DB) => {
-                        UPDATE(DB, this.#tables.get('cards'), {value: card, key: card.id})
-                        .then( (id) => {
-                            this.#cardRepo.set(card.id, card);
-                        });
-                    })
-                );
-            } else {
-                promises.push(
-                    this.#db_instance.then( (DB) => {
-                        ADD(DB, this.#tables.get('cards'), {value: {title: card.title}})
-                        .then( (id) => {
-                            card.id = id;
-                            this.#cardRepo.set(card.id, card);
-                        });
-                    })
-                );
+        if(this.#isInit) {
+            const promises = new Array();
+            for(let card of cards) {
+                if(card.id) {
+                    promises.push(
+                        this.#db_instance.then( (DB) => {
+                            UPDATE(DB, this.#tables.get('cards'), {value: card, key: card.id})
+                            .then( (id) => {
+                                this.#cardRepo.set(card.id, card);
+                            });
+                        })
+                    );
+                } else {
+                    promises.push(
+                        this.#db_instance.then( (DB) => {
+                            ADD(DB, this.#tables.get('cards'), {value: {title: card.title}})
+                            .then( (id) => {
+                                card.id = id;
+                                this.#cardRepo.set(card.id, card);
+                            });
+                        })
+                    );
+                }
             }
+            return await Promise.all(promises);
         }
-        return await Promise.all(promises);
     }
 }
 
+export const AppDB = await (
+    async function() {
+        const DB = new AppDatabase();
+        return await DB.init();
+    }
+)();
