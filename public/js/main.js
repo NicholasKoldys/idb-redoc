@@ -17,7 +17,8 @@ const delBtn = document.getElementById('del-card-btn');
 addBtn.onclick = async (ev) => {
     const card = new Card('New Card');
     try {
-        card.id = await AppDB.setCards( card );
+        card.id = await DB.addCard( card );
+        loadCardsIntoDOM( await DB.cards );
     } catch( e ) {
         console.log(e);
     }
@@ -28,8 +29,9 @@ addBtn.onclick = async (ev) => {
  */
 function loadCardsIntoDOM( cards ) {
     // for(let [_, card] of cards ) {
+    cardBox.innerHTML = '';
     cards.forEach( card => {
-        cardBox.append( card.loadCard( CARD_TEMPLATE ));
+        cardBox.append( card.loadCard( CARD_TEMPLATE ) );
     });
 }
 
